@@ -20,7 +20,7 @@ class Events {
 	 * Filters
 	 */
 	public static function where_args() {
-		return array(
+		$where_args = array(
 			'venuesIn'       => array(
 				'type'        => array( 'list_of' => 'Int' ),
 				'description' => __( 'Filter the connection based on event venue ID', 'ql-events' ),
@@ -38,5 +38,14 @@ class Events {
 				'description' => __( 'Filter the connection based on event end dates', 'ql-events' ),
 			),
 		);
+
+		if ( is_callable( '\tribe_is_recurring_event' ) ) {
+			$where_args['firstRecurrenceOnly'] = array(
+				'type'        => 'Boolean',
+				'description' => __( 'Show only the first instance of each recurring event', 'ql-events' ),
+			);
+		}
+
+		return $where_args;
 	}
 }

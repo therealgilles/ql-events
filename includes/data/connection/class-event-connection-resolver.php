@@ -43,9 +43,22 @@ class Event_Connection_Resolver {
 		/**
 		 * Merge the input_fields with the default query_args
 		 */
-		// if ( ! empty( $input_fields ) ) {
-		// 	$query_args = array_merge( $query_args, $input_fields );
-		// }
+		if ( ! empty( $input_fields ) ) {
+			$query_args = array_merge( $query_args, $input_fields );
+		}
+
+		// disable the Events Calendar query filters
+		$query_args['tribe_suppress_query_filters'] = true;
+
+		// support for hiding subsequent recurrences of events
+		if (isset($query_args['firstRecurrenceOnly']) && ($query_args['firstRecurrenceOnly'] == true)) {
+			add_filter( 'posts_distinct', array( __CLASS__, 'posts_distinct' ) );
+			add_filter( 'posts_groupby', array( __CLASS__, 'posts_groupby' ) );
+
+            // Remove the filters (including this one) right before running the WP_Query,
+            // so that they are not present for subsequent queries.
+			add_filter( 'posts_pre_query', array( __CLASS__, 'remove_posts_query_filters' ) );
+		}
 
 		return apply_filters(
 			'graphql_' . Main::POSTTYPE . '_connection_query_args',
@@ -55,6 +68,52 @@ class Event_Connection_Resolver {
 			$context,
 			$info
 		);
+	}
+
+	/**
+	 * This removes the filters set for the firstRecurrenceOnly query variable.
+	 *
+	 * @since ???
+	 * @access public
+	 *
+	 * @return null - Returns null so that the WP_Query is computed as usual.
+	 */
+	public static function remove_posts_query_filters () {
+		remove_filter( 'posts_distinct', array( __CLASS__, 'posts_distinct' ) );
+		remove_filter( 'posts_groupby', array( __CLASS__, 'posts_groupby' ) );
+		remove_filter( 'posts_pre_query', array( __CLASS__, 'remove_posts_query_filters' ) );
+		return null;
+	}
+
+	/**
+	 * This adds DISTINCT to the WP_Query.
+	 *
+	 * @since ???
+	 * @access public
+	 *
+	 * @param string $distinct - WP_Query distinct argument input.
+	 *
+	 * @return string
+	 */
+	public static function posts_distinct ( $distinct ) {
+		return 'DISTINCT';
+	}
+
+	/**
+	 * This groups the query results by post parent ID or existing grouping if the post does not have a parent.
+	 * When combined with posts_distinct above, it allows to filter out subsequent event recurrences
+	 * (as they have the same post parent, which is the first event of the series).
+	 *
+	 * @since ???
+	 * @access public
+	 *
+	 * @param string $groupby - WP_Query groupby argument input.
+	 *
+	 * @return string
+	 */
+	public static function posts_groupby ( $groupby ) {
+		global $wpdb;
+		return "IF( {$wpdb->posts}.post_parent = 0, {$groupby}, {$wpdb->posts}.post_parent )";
 	}
 
 	/**
